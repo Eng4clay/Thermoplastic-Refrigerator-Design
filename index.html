@@ -1,0 +1,2173 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Absorption Refrigeration Unit — Rev N</title>
+
+<style>
+  :root{
+    --navy:#0F2A47; --copper:#C87F4A; --bg:#0b0e13;
+    --panel:#141a24; --accent:#f0a860;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;overflow:hidden;background:var(--bg);color:#e8e6df;
+    font-family:"Segoe UI",Tahoma,Arial,sans-serif}
+
+  #app{position:relative;width:100vw;height:100vh}
+  #canvas-wrap{position:absolute;inset:0}
+  #canvas-wrap canvas{display:block;outline:none}
+
+  header{
+    position:absolute;top:0;left:0;right:0;z-index:10;
+    display:flex;justify-content:space-between;align-items:center;
+    padding:10px 20px;
+    background:linear-gradient(180deg, rgba(15,20,28,0.95), rgba(15,20,28,0.6) 70%, transparent);
+    pointer-events:none;
+  }
+  header h1{font-size:15px;color:var(--accent);font-weight:700}
+  header .sub{font-size:11px;color:#8a95a6;margin-top:2px}
+  header img{height:38px;border-radius:50%;background:#fff;padding:2px;pointer-events:auto}
+
+  .controls{
+    position:absolute;top:80px;right:20px;z-index:10;
+    display:flex;flex-direction:column;gap:8px;max-width:230px;
+  }
+  .controls button{
+    padding:10px 14px;border:none;border-radius:8px;
+    font-size:12px;font-weight:600;cursor:pointer;text-align:right;
+    transition:.2s;box-shadow:0 4px 12px rgba(0,0,0,0.5);
+  }
+  .controls button:hover{transform:translateX(-3px)}
+  .btn-flame{background:linear-gradient(135deg,#FF4500,#FF6B1A);color:#fff}
+  .btn-cold{background:linear-gradient(135deg,#00B4D8,#0077B6);color:#fff}
+  .btn-can{background:linear-gradient(135deg,#C8102E,#8B0000);color:#fff}
+  .btn-primary{background:#2C5F8A;color:#fff}
+  .btn-warning{background:#B8860B;color:#fff}
+  .btn-flow{background:linear-gradient(135deg,#9C27B0,#673AB7);color:#fff}
+  .btn-heat{background:linear-gradient(135deg,#E91E63,#F44336);color:#fff}
+  .btn-blueprint{background:linear-gradient(135deg,#2C5F8A,#1a3a5c);color:#fff}
+  .btn-active{outline:2px solid #FFD700;box-shadow:0 0 15px #FFD700}
+
+  .legend{
+    position:absolute;bottom:20px;left:20px;z-index:10;
+    background:rgba(20,24,30,0.85);backdrop-filter:blur(8px);
+    border:1px solid #3a4658;border-radius:8px;
+    padding:12px 15px;font-size:11px;
+  }
+  .legend .item{display:flex;align-items:center;gap:8px;margin:4px 0}
+  .swatch{width:14px;height:14px;border-radius:3px;border:1px solid #333}
+
+  .stats{
+    position:absolute;bottom:20px;right:20px;z-index:10;
+    background:rgba(20,24,30,0.85);backdrop-filter:blur(8px);
+    border:1px solid #3a4658;border-radius:8px;
+    padding:10px 14px;font-size:11px;color:#8a95a6;
+    font-family:Consolas,monospace;
+  }
+  .stats strong{color:var(--accent)}
+
+  .toast{
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+    background:var(--navy);color:#fff;padding:10px 22px;
+    border-radius:8px;z-index:9999;font-size:13px;
+    box-shadow:0 8px 24px rgba(0,0,0,0.6);
+    animation:slideUp .3s ease-out;
+  }
+  @keyframes slideUp{from{transform:translate(-50%,20px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
+
+  #loading{
+    position:absolute;inset:0;z-index:100;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background:var(--bg);gap:20px;
+  }
+  #loading.hidden{display:none}
+  .spinner{
+    width:50px;height:50px;border:3px solid #2a3140;
+    border-top-color:var(--accent);border-radius:50%;
+    animation:spin 1s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  #loading p{color:var(--accent);font-size:14px}
+
+  #webgl-error{
+    position:absolute;inset:0;z-index:200;display:none;
+    flex-direction:column;align-items:center;justify-content:center;
+    background:var(--bg);color:#ff6b6b;text-align:center;padding:40px;
+  }
+  #webgl-error.show{display:flex}
+  #webgl-error h2{margin-bottom:10px;color:#f0a860}
+
+  /* =========================================================
+     Blueprint Modal
+     ========================================================= */
+  #blueprint-modal{
+    position:fixed;inset:0;z-index:500;
+    background:rgba(0,0,0,0.92);backdrop-filter:blur(10px);
+    display:none;flex-direction:column;
+  }
+  #blueprint-modal.show{display:flex}
+
+  .bp-header{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:15px 25px;background:var(--panel);
+    border-bottom:2px solid var(--copper);
+  }
+  .bp-header h2{color:var(--accent);font-size:16px}
+  .bp-actions{display:flex;gap:10px}
+  .bp-actions button{
+    padding:10px 18px;border:none;border-radius:6px;
+    font-size:12px;font-weight:600;cursor:pointer;
+    transition:.2s;color:#fff;
+  }
+  .bp-actions button:hover{transform:translateY(-2px)}
+  .btn-print{background:linear-gradient(135deg,#2C5F8A,#1a3a5c)}
+  .btn-svg{background:linear-gradient(135deg,#1E7145,#0d4a2b)}
+  .btn-close{background:linear-gradient(135deg,#B23A48,#7a1e28)}
+
+  /* 🆕 Tabs */
+  .bp-tabs{
+    display:flex;background:var(--panel);
+    border-bottom:2px solid var(--copper);
+    padding:0 25px;
+  }
+  .bp-tab{
+    padding:12px 22px;background:transparent;border:none;
+    color:#8a95a6;font-size:13px;font-weight:600;
+    cursor:pointer;border-bottom:3px solid transparent;
+    transition:.2s;
+  }
+  .bp-tab:hover{color:#fff;background:#1a2332}
+  .bp-tab.active{color:var(--accent);border-bottom-color:var(--copper)}
+
+  .bp-content{
+    flex:1;overflow:auto;padding:25px;
+    background:#f4f1ea;
+  }
+  .bp-panel{display:none}
+  .bp-panel.active{display:block}
+  .bp-doc{
+    max-width:1500px;margin:0 auto;background:#fff;
+    border:2px solid #2b3a55;border-radius:6px;
+    padding:20px;box-shadow:0 10px 30px rgba(0,0,0,0.5);
+  }
+  .bp-doc svg{display:block;width:100%;height:auto}
+
+  /* =========================================================
+     🆕 P-H Chart Section
+     ========================================================= */
+  .ph-section{
+    max-width:1500px;margin:0 auto;
+    background:#fff;border:2px solid #2b3a55;border-radius:6px;
+    padding:25px;box-shadow:0 10px 30px rgba(0,0,0,0.5);
+  }
+  .ph-section h3{
+    color:#0F2A47;font-size:16px;font-weight:700;
+    margin-bottom:8px;padding-bottom:8px;
+    border-bottom:2px solid #C87F4A;
+    font-family:Consolas,'Courier New',monospace;
+    direction:ltr;text-align:left;
+  }
+  .ph-section .ph-subtitle{
+    font-family:Consolas,'Courier New',monospace;
+    font-size:11px;color:#7a7a6e;
+    margin-bottom:20px;direction:ltr;text-align:left;
+  }
+  #ph-chart{
+    width:100%;height:600px;background:#fafafa;
+    border:1px solid #ccc;border-radius:4px;
+    position:relative;
+  }
+  #ph-chart svg{display:block;width:100%;height:100%}
+
+  .ph-data-table{
+    margin-top:25px;
+    font-family:Consolas,'Courier New',monospace;
+    font-size:12px;direction:ltr;text-align:left;
+    border-collapse:collapse;width:100%;
+  }
+  .ph-data-table thead{
+    background:linear-gradient(180deg,#0F2A47,#1a3a5c);
+    color:#fff;
+  }
+  .ph-data-table th{
+    padding:10px 12px;text-align:left;font-weight:700;
+    font-size:11px;letter-spacing:0.5px;
+    border-right:1px solid rgba(255,255,255,0.15);
+  }
+  .ph-data-table th:last-child{border-right:none}
+  .ph-data-table td{
+    padding:10px 12px;border-bottom:1px solid #e0dfd5;
+    color:#2b3a55;
+  }
+  .ph-data-table tbody tr:nth-child(even){background:#faf8f2}
+  .ph-data-table tbody tr:hover{background:#fff3e0}
+
+  .ph-stats{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+    gap:15px;margin-top:25px;
+  }
+  .ph-stat-card{
+    padding:18px;border-radius:8px;
+    border-left:4px solid #C87F4A;
+    background:#faf8f2;
+    font-family:Consolas,monospace;
+    direction:ltr;text-align:left;
+  }
+  .ph-stat-card .label{
+    font-size:10px;color:#7a7a6e;text-transform:uppercase;
+    letter-spacing:1px;margin-bottom:6px;
+  }
+  .ph-stat-card .value{
+    font-size:20px;color:#0F2A47;font-weight:700;
+  }
+  .ph-stat-card .unit{
+    font-size:12px;color:#7a7a6e;margin-left:4px;
+  }
+  .ph-stat-card.blue{border-left-color:#00B4D8}
+  .ph-stat-card.red{border-left-color:#FF4500}
+  .ph-stat-card.green{border-left-color:#1E7145}
+
+  @media print{
+    body{background:#fff;overflow:visible;height:auto}
+    header,.controls,.legend,.stats,.bp-header,.bp-tabs,#canvas-wrap,.toast{display:none!important}
+    #blueprint-modal{position:relative;display:block!important;background:#fff;inset:auto}
+    .bp-content{padding:0;background:#fff;overflow:visible}
+    .bp-panel{display:block!important}
+    .bp-doc,.ph-section{border:2px solid #000;box-shadow:none;margin-bottom:20px;page-break-inside:avoid}
+    #ph-chart{height:500px}
+    @page{size:A3 landscape;margin:10mm}
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <header>
+    <div>
+      <h1>🔥 Absorption Refrigeration Unit — Rev N</h1>
+      <div class="sub">Blueprint + AutoCAD + P-H Diagram (Pressure-Enthalpy)</div>
+    </div>
+    <img src="https://alhqyq.com/contents/newsm/18346_0.jpg" alt="Logo">
+  </header>
+
+  <div id="canvas-wrap"></div>
+
+  <div class="controls">
+    <button class="btn-flame" id="btnFlame">🔥 إشعال الشمعة</button>
+    <button class="btn-cold" id="btnCool">❄️ بدء التبريد</button>
+    <button class="btn-can" id="btnCan">🥤 إدخال عبوة</button>
+    <button class="btn-flow" id="btnFlow">🌊 جزيئات التدفق</button>
+    <button class="btn-heat" id="btnHeat">🌡️ تدرج حراري</button>
+    <button class="btn-primary" id="btnRotate">🔄 تدوير تلقائي</button>
+    <button class="btn-primary" id="btnTour">🎬 جولة سينمائية</button>
+    <button class="btn-blueprint" id="btnBlueprint">📐 مخطط AutoCAD + P-H</button>
+    <button class="btn-warning" id="btnReset">⏹ إعادة تعيين</button>
+  </div>
+
+  <div class="legend">
+    <div class="item"><span class="swatch" style="background:#C87F4A"></span> أنابيب نحاسية</div>
+    <div class="item"><span class="swatch" style="background:#C9A227"></span> صمام + منفذ تعبئة</div>
+    <div class="item"><span class="swatch" style="background:#00B4D8"></span> المبخر الأسطواني</div>
+    <div class="item"><span class="swatch" style="background:#C8102E"></span> عبوة المشروب</div>
+    <div class="item"><span class="swatch" style="background:#FF6B1A"></span> الشمعة (منفصلة)</div>
+    <div class="item"><span class="swatch" style="background:#9C27B0"></span> جزيئات التدفق</div>
+  </div>
+
+  <div class="stats" id="stats">
+    FPS: <strong id="fps">--</strong> · Draws: <strong id="draws">--</strong> · Tris: <strong id="tris">--</strong>
+  </div>
+
+  <div id="loading">
+    <div class="spinner"></div>
+    <p>جارٍ تحميل HDRI والمشهد…</p>
+  </div>
+
+  <div id="webgl-error">
+    <h2>⚠ WebGL2 غير مدعوم</h2>
+    <p>يحتاج هذا العرض إلى متصفح حديث يدعم WebGL2 (Chrome 90+، Firefox 90+، Safari 15+).</p>
+  </div>
+</div>
+
+<!-- =========================================================
+     Blueprint Modal with Tabs
+     ========================================================= -->
+<div id="blueprint-modal">
+  <div class="bp-header">
+    <h2>📐 Absorption Refrigeration Unit — Blueprint + P-H Diagram</h2>
+    <div class="bp-actions">
+      <button class="btn-print" id="btnPrint">🖨️ طباعة A3</button>
+      <button class="btn-svg" id="btnDownloadSVG">💾 تحميل SVG</button>
+      <button class="btn-close" id="btnCloseBP">✖ إغلاق</button>
+    </div>
+  </div>
+
+  <div class="bp-tabs">
+    <button class="bp-tab active" data-tab="bp">📐 Blueprint (AutoCAD)</button>
+    <button class="bp-tab" data-tab="ph">📊 P-H Diagram</button>
+    <button class="bp-tab" data-tab="laws">⚙️ Laws of Thermodynamics</button>
+  </div>
+
+  <div class="bp-content">
+
+    <!-- ============================================================
+         TAB 1: BLUEPRINT
+         ============================================================ -->
+    <div class="bp-panel active" id="panel-bp">
+      <div class="bp-doc" id="bp-doc">
+        <svg id="blueprint-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1100" font-family="Consolas, 'Courier New', monospace">
+          <defs>
+            <pattern id="grid" width="25" height="25" patternUnits="userSpaceOnUse">
+              <path d="M 25 0 L 0 0 0 25" fill="none" stroke="#e3ded0" stroke-width="1"/>
+            </pattern>
+            <marker id="arrowBP" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#b5651d"/>
+            </marker>
+            <marker id="dimarrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#2b3a55"/>
+            </marker>
+            <marker id="coldArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#00B4D8"/>
+            </marker>
+          </defs>
+
+          <rect x="0" y="0" width="1600" height="1100" fill="#f4f1ea"/>
+          <rect x="0" y="0" width="1600" height="1100" fill="url(#grid)"/>
+
+          <!-- TITLE BLOCK -->
+          <rect x="20" y="20" width="1560" height="75" fill="#fff" stroke="#2b3a55" stroke-width="2"/>
+          <text x="40" y="48" font-size="22" fill="#2b3a55" font-weight="bold">ABSORPTION REFRIGERATION UNIT — SCHEMATIC DIAGRAM (REV N)</text>
+          <text x="40" y="72" font-size="12" fill="#5a5a5a">Wooden base · Candle-driven generator · Helical capillary · Cylindrical spiral evaporator · Fill port valve</text>
+          <text x="1250" y="40" font-size="12" fill="#5a5a5a">DWG NO: ABS-REF-006</text>
+          <text x="1250" y="58" font-size="12" fill="#5a5a5a">REV: N</text>
+          <text x="1250" y="76" font-size="12" fill="#5a5a5a">SCALE: NTS | UNITS: mm</text>
+
+          <!-- ITEM 1 — WOOD BASE -->
+          <rect x="100" y="880" width="1400" height="50" fill="#e0c9a0" stroke="#8a6d3b" stroke-width="2.5"/>
+          <text x="800" y="912" font-size="13" text-anchor="middle" fill="#5a5a5a" font-weight="600">ITEM 1 — WOOD BASE BOARD (420 × 240 × 16 mm)</text>
+          <line x1="100" y1="955" x2="1500" y2="955" stroke="#2b3a55" stroke-width="1" marker-start="url(#dimarrow)" marker-end="url(#dimarrow)"/>
+          <text x="800" y="972" font-size="12" text-anchor="middle" fill="#2b3a55">420 mm</text>
+
+          <!-- ITEM 2 — CANDLE -->
+          <rect x="255" y="855" width="180" height="18" fill="#2a2f3a" stroke="#111" stroke-width="2" rx="2"/>
+          <text x="345" y="888" font-size="10" text-anchor="middle" fill="#666" font-style="italic">steel plate</text>
+          <circle cx="270" cy="864" r="4" fill="#888" stroke="#333"/>
+          <circle cx="420" cy="864" r="4" fill="#888" stroke="#333"/>
+          <circle cx="270" cy="875" r="4" fill="#888" stroke="#333"/>
+          <circle cx="420" cy="875" r="4" fill="#888" stroke="#333"/>
+          <rect x="320" y="825" width="50" height="32" fill="#fff7e0" stroke="#c9a227" stroke-width="2" rx="3"/>
+          <line x1="345" y1="825" x2="345" y2="808" stroke="#e07a1f" stroke-width="2.5"/>
+          <path d="M 345 808 Q 337 790 345 773 Q 353 790 345 808" fill="#FF6B1A" stroke="#FF4500" stroke-width="1.5"/>
+          <text x="345" y="1000" font-size="13" text-anchor="middle" fill="#2b3a55" font-weight="bold">ITEM 2 — CANDLE (HEAT SOURCE)</text>
+          <text x="345" y="1016" font-size="11" text-anchor="middle" fill="#5a5a5a">Standalone below ITEM 8 — Radiation heating</text>
+
+          <!-- ITEM 8 — CHECK VALVE -->
+          <g transform="translate(345, 760)">
+            <rect x="-140" y="-22" width="280" height="44" fill="#c87f4a" stroke="#7a4a24" stroke-width="2.5" rx="6"/>
+            <rect x="-150" y="-30" width="20" height="60" fill="#a06530" stroke="#7a4a24" stroke-width="2" rx="3"/>
+            <rect x="130" y="-30" width="20" height="60" fill="#a06530" stroke="#7a4a24" stroke-width="2" rx="3"/>
+            <polygon points="-170,-12 -150,-18 -150,18 -170,12" fill="#8a4f22" stroke="#7a4a24" stroke-width="2"/>
+            <polygon points="170,-12 150,-18 150,18 170,12" fill="#8a4f22" stroke="#7a4a24" stroke-width="2"/>
+            <rect x="40" y="-70" width="20" height="50" fill="#c9a227" stroke="#6b5417" stroke-width="2"/>
+            <circle cx="50" cy="-75" r="14" fill="#1E7145" stroke="#0d4a2b" stroke-width="2"/>
+            <circle cx="50" cy="-75" r="5" fill="#888" stroke="#333"/>
+          </g>
+          <text x="345" y="640" font-size="13" text-anchor="middle" fill="#2b3a55" font-weight="bold">ITEM 8 — CHECK VALVE + FILL PORT</text>
+          <text x="345" y="656" font-size="11" text-anchor="middle" fill="#5a5a5a">Copper tube Ø22 × 150 mm · Schrader fill port</text>
+
+          <!-- ITEM 5 — CONDENSER -->
+          <g transform="translate(180, 480)">
+            <rect x="-40" y="80" width="140" height="80" fill="#c9a878" stroke="#8a6d3b" stroke-width="2"/>
+            <ellipse cx="30" cy="40" rx="80" ry="30" fill="none" stroke="#c87f4a" stroke-width="9"/>
+            <ellipse cx="30" cy="20" rx="80" ry="30" fill="none" stroke="#c87f4a" stroke-width="9"/>
+            <ellipse cx="30" cy="0" rx="80" ry="30" fill="none" stroke="#c87f4a" stroke-width="9"/>
+            <ellipse cx="30" cy="-20" rx="80" ry="30" fill="none" stroke="#c87f4a" stroke-width="9"/>
+            <ellipse cx="30" cy="-40" rx="80" ry="30" fill="none" stroke="#c87f4a" stroke-width="9"/>
+          </g>
+          <text x="210" y="380" font-size="13" text-anchor="middle" fill="#2b3a55" font-weight="bold">ITEM 5 — CONDENSER</text>
+          <text x="210" y="396" font-size="11" text-anchor="middle" fill="#5a5a5a">1/4" copper, 5 helical turns, Ø64 mm</text>
+
+          <!-- ITEM 6 — CAPILLARY -->
+          <path d="M 1180 480 Q 900 380 620 380 Q 420 380 350 400" stroke="#c87f4a" stroke-width="7" fill="none"/>
+          <path d="M 350 400 Q 260 420 240 460" stroke="#c87f4a" stroke-width="7" fill="none"/>
+          <g transform="translate(620, 380)">
+            <path d="M -30 -15 Q -15 -25 0 -15 Q 15 -5 30 -15 Q 45 -25 60 -15" fill="none" stroke="#8a4a1f" stroke-width="4"/>
+            <path d="M -30 -5 Q -15 -15 0 -5 Q 15 5 30 -5 Q 45 -15 60 -5" fill="none" stroke="#8a4a1f" stroke-width="4"/>
+            <path d="M -30 5 Q -15 -5 0 5 Q 15 15 30 5 Q 45 -5 60 5" fill="none" stroke="#8a4a1f" stroke-width="4"/>
+          </g>
+          <text x="620" y="330" font-size="13" text-anchor="middle" fill="#2b3a55" font-weight="bold">ITEM 6 — CAPILLARY TUBE</text>
+          <text x="620" y="346" font-size="11" text-anchor="middle" fill="#5a5a5a">Copper ~1 mm ID, ~1500 mm · Helical coil</text>
+
+          <!-- ITEM 9 — EVAPORATOR -->
+          <g transform="translate(1180, 620)">
+            <ellipse cx="0" cy="-160" rx="140" ry="35" fill="none" stroke="#999" stroke-width="1" stroke-dasharray="4,3"/>
+            <ellipse cx="0" cy="160" rx="140" ry="35" fill="none" stroke="#999" stroke-width="1" stroke-dasharray="4,3"/>
+            <line x1="-140" y1="-160" x2="-140" y2="160" stroke="#999" stroke-width="1" stroke-dasharray="4,3"/>
+            <line x1="140" y1="-160" x2="140" y2="160" stroke="#999" stroke-width="1" stroke-dasharray="4,3"/>
+            <g stroke="#c87f4a" stroke-width="6" fill="none">
+              <ellipse cx="0" cy="-150" rx="140" ry="35"/>
+              <ellipse cx="0" cy="-128" rx="140" ry="35"/>
+              <ellipse cx="0" cy="-106" rx="140" ry="35"/>
+              <ellipse cx="0" cy="-84" rx="140" ry="35"/>
+              <ellipse cx="0" cy="-62" rx="140" ry="35"/>
+              <ellipse cx="0" cy="-40" rx="140" ry="35"/>
+              <ellipse cx="0" cy="-18" rx="140" ry="35"/>
+              <ellipse cx="0" cy="4" rx="140" ry="35"/>
+              <ellipse cx="0" cy="26" rx="140" ry="35"/>
+              <ellipse cx="0" cy="48" rx="140" ry="35"/>
+              <ellipse cx="0" cy="70" rx="140" ry="35"/>
+              <ellipse cx="0" cy="92" rx="140" ry="35"/>
+              <ellipse cx="0" cy="114" rx="140" ry="35"/>
+              <ellipse cx="0" cy="136" rx="140" ry="35"/>
+            </g>
+            <ellipse cx="0" cy="-110" rx="60" ry="16" fill="#C8102E" stroke="#8B0000" stroke-width="2"/>
+            <rect x="-60" y="-110" width="120" height="190" fill="#C8102E" stroke="#8B0000" stroke-width="2" rx="4"/>
+            <ellipse cx="0" cy="80" rx="60" ry="16" fill="#A00" stroke="#8B0000" stroke-width="2"/>
+            <text x="0" y="-10" font-size="18" text-anchor="middle" fill="#fff" font-weight="bold">PEPSI</text>
+            <ellipse cx="0" cy="0" rx="180" ry="200" fill="#00B4D8" opacity="0.08"/>
+          </g>
+          <text x="1180" y="380" font-size="14" text-anchor="middle" fill="#2b3a55" font-weight="bold">ITEM 9 — CYLINDRICAL SPIRAL EVAPORATOR</text>
+          <text x="1180" y="398" font-size="11" text-anchor="middle" fill="#5a5a5a">1/4" copper, 14 turns, Ø110 mm outer</text>
+
+          <!-- ITEM 7 — CLAMPS -->
+          <g fill="#666" stroke="#333" stroke-width="1.5">
+            <circle cx="180" cy="880" r="8"/>
+            <circle cx="1180" cy="880" r="8"/>
+            <circle cx="700" cy="880" r="8"/>
+          </g>
+          <text x="700" y="1000" font-size="13" text-anchor="middle" fill="#2b3a55" font-weight="bold">ITEM 7 — MOUNTING CLAMPS</text>
+
+          <!-- RETURN PATH -->
+          <path d="M 1180 780 L 1180 850 L 500 850 L 500 780 L 400 780" stroke="#c87f4a" stroke-width="8" fill="none"/>
+          <path d="M 220 760 L 220 700 L 240 660" stroke="#c87f4a" stroke-width="8" fill="none"/>
+
+          <!-- FLOW ARROWS -->
+          <path d="M 345 810 L 345 730" stroke="#FF4500" stroke-width="4" marker-end="url(#arrowBP)"/>
+          <text x="370" y="800" font-size="11" fill="#FF4500" font-weight="700">🔥 HEAT</text>
+          <path d="M 240 460 Q 400 420 620 380" stroke="#00B4D8" stroke-width="3" marker-end="url(#coldArrow)" fill="none" stroke-dasharray="6,3"/>
+          <text x="440" y="440" font-size="11" fill="#00B4D8" font-weight="600">COLD LIQUID →</text>
+          <path d="M 700 380 Q 900 400 1180 480" stroke="#00B4D8" stroke-width="3" marker-end="url(#coldArrow)" fill="none" stroke-dasharray="6,3"/>
+          <path d="M 1180 780 L 1180 830 L 500 830" stroke="#b5651d" stroke-width="3" marker-end="url(#arrowBP)" fill="none"/>
+          <text x="820" y="820" font-size="11" fill="#b5651d" font-weight="600">RETURN GAS</text>
+          <path d="M 220 760 L 220 700 L 240 660" stroke="#b5651d" stroke-width="3" marker-end="url(#arrowBP)" fill="none"/>
+
+          <!-- NOTES -->
+          <rect x="20" y="990" width="800" height="100" fill="#fff" stroke="#2b3a55" stroke-width="1.5"/>
+          <text x="35" y="1012" font-size="12" fill="#2b3a55" font-weight="bold">NOTES (Rev N)</text>
+          <text x="35" y="1032" font-size="10" fill="#5a5a5a">1. Cycle: Heat (ITEM 2) → ITEM 8 → ITEM 5 → ITEM 6 → ITEM 9 → return.</text>
+          <text x="35" y="1048" font-size="10" fill="#5a5a5a">2. Candle fully separate from ITEM 8 — radiation heating.</text>
+          <text x="35" y="1064" font-size="10" fill="#5a5a5a">3. ITEM 8 includes Schrader fill port (green cap) for gas charging.</text>
+          <text x="35" y="1080" font-size="10" fill="#b5651d" font-weight="bold">⚠ Experimental prototype — verify dimensions and safety.</text>
+
+          <!-- TITLE BLOCK -->
+          <rect x="1200" y="990" width="380" height="100" fill="#fff" stroke="#2b3a55" stroke-width="1.5"/>
+          <line x1="1200" y1="1020" x2="1580" y2="1020" stroke="#2b3a55" stroke-width="1"/>
+          <line x1="1200" y1="1050" x2="1580" y2="1050" stroke="#2b3a55" stroke-width="1"/>
+          <line x1="1200" y1="1080" x2="1580" y2="1080" stroke="#2b3a55" stroke-width="1"/>
+          <text x="1210" y="1012" font-size="11" fill="#2b3a55" font-weight="bold">PROJECT: Absorption Refrigeration Unit — Rev N</text>
+          <text x="1210" y="1042" font-size="10" fill="#5a5a5a">Scale: NTS | Units: mm | Rev: N</text>
+          <text x="1210" y="1072" font-size="10" fill="#5a5a5a">Prepared by: Eng. Ahmad Ali Bokar Nasib</text>
+          <text x="1210" y="1096" font-size="9" fill="#7a7a6e" font-style="italic">© 2026 — Experimental Educational Prototype</text>
+        </svg>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         TAB 2: P-H DIAGRAM
+         ============================================================ -->
+    <div class="bp-panel" id="panel-ph">
+      <div class="ph-section">
+        <h3>📊 PRESSURE–ENTHALPY (P-H) DIAGRAM — VAPOR COMPRESSION CYCLE</h3>
+        <div class="ph-subtitle">Refrigerant: R-134a (approximate) · Cycle: 1→2 Compression · 2→3 Condensation · 3→4 Expansion · 4→1 Evaporation</div>
+
+        <div id="ph-chart"></div>
+
+        <!-- Stats cards -->
+        <div class="ph-stats">
+          <div class="ph-stat-card red">
+            <div class="label">Evaporator Pressure</div>
+            <div class="value">2.0<span class="unit">bar</span></div>
+          </div>
+          <div class="ph-stat-card blue">
+            <div class="label">Condenser Pressure</div>
+            <div class="value">10.0<span class="unit">bar</span></div>
+          </div>
+          <div class="ph-stat-card">
+            <div class="label">Refrigeration Capacity (Q<sub>C</sub>)</div>
+            <div class="value">145<span class="unit">kJ/kg</span></div>
+          </div>
+          <div class="ph-stat-card">
+            <div class="label">Compressor Work (W<sub>in</sub>)</div>
+            <div class="value">40<span class="unit">kJ/kg</span></div>
+          </div>
+          <div class="ph-stat-card green">
+            <div class="label">COP (actual)</div>
+            <div class="value">3.62</div>
+          </div>
+          <div class="ph-stat-card blue">
+            <div class="label">COP (Carnot ideal)</div>
+            <div class="value">5.33</div>
+          </div>
+        </div>
+
+        <!-- Data table -->
+        <table class="ph-data-table">
+          <thead>
+            <tr>
+              <th style="width:60px">Point</th>
+              <th style="width:120px">State</th>
+              <th>Pressure P<br>(bar)</th>
+              <th>Enthalpy h<br>(kJ/kg)</th>
+              <th>Temperature T<br>(°C)</th>
+              <th>Entropy s<br>(kJ/kg·K)</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong style="color:#00B4D8">1</strong></td>
+              <td>Saturated Vapor</td>
+              <td>2.0</td>
+              <td>395.0</td>
+              <td>−10.0</td>
+              <td>1.73</td>
+              <td>Exit of evaporator — cold vapor enters compressor</td>
+            </tr>
+            <tr>
+              <td><strong style="color:#FF4500">2</strong></td>
+              <td>Superheated Vapor</td>
+              <td>10.0</td>
+              <td>435.0</td>
+              <td>+45.0</td>
+              <td>1.73</td>
+              <td>Exit of compressor — high-pressure hot vapor</td>
+            </tr>
+            <tr>
+              <td><strong style="color:#B8860B">3</strong></td>
+              <td>Saturated Liquid</td>
+              <td>10.0</td>
+              <td>250.0</td>
+              <td>+40.0</td>
+              <td>1.20</td>
+              <td>Exit of condenser — high-pressure liquid</td>
+            </tr>
+            <tr>
+              <td><strong style="color:#9C27B0">4</strong></td>
+              <td>Liquid-Vapor Mix</td>
+              <td>2.0</td>
+              <td>250.0</td>
+              <td>−10.0</td>
+              <td>1.28</td>
+              <td>Exit of expansion valve (isenthalpic)</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Cycle description -->
+        <div style="margin-top:25px;padding:18px;background:#faf8f2;border-left:4px solid #C87F4A;border-radius:4px;
+                    font-family:Consolas,monospace;font-size:12px;color:#2b3a55;direction:ltr;text-align:left;line-height:1.9;">
+          <strong style="color:#0F2A47;">CYCLE PROCESSES:</strong><br>
+          <span style="color:#FF4500;">1 → 2 &nbsp; Isentropic Compression</span> — Pressure ↑ from 2.0 to 10.0 bar, entropy constant<br>
+          <span style="color:#B8860B;">2 → 3 &nbsp; Isobaric Condensation</span> — Heat Q<sub>H</sub> rejected to ambient at constant pressure<br>
+          <span style="color:#9C27B0;">3 → 4 &nbsp; Isenthalpic Expansion</span> — Enthalpy constant, pressure drops through capillary<br>
+          <span style="color:#00B4D8;">4 → 1 &nbsp; Isobaric Evaporation</span> — Heat Q<sub>C</sub> absorbed from beverage can at constant pressure<br><br>
+          <strong>Energy Balance:</strong> &nbsp; Q<sub>H</sub> = Q<sub>C</sub> + W<sub>in</sub> &nbsp;&nbsp;→&nbsp;&nbsp; 185 = 145 + 40 ✓<br>
+          <strong>COP:</strong> &nbsp; COP<sub>actual</sub> = Q<sub>C</sub> / W<sub>in</sub> = 145 / 40 = <span style="color:#1E7145;font-weight:700;">3.625</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         TAB 3: LAWS OF THERMODYNAMICS
+         ============================================================ -->
+    <div class="bp-panel" id="panel-laws">
+      <div class="ph-section">
+        <h3>⚙️ THE FOUR LAWS OF THERMODYNAMICS — APPLIED TO ABSORPTION REFRIGERATION</h3>
+        <table class="ph-data-table">
+          <thead>
+            <tr>
+              <th style="width:60px">Law</th>
+              <th style="width:200px">Name</th>
+              <th style="width:280px">Statement</th>
+              <th>Application to this Unit</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong style="color:#C87F4A;font-size:14px;">0</strong></td>
+              <td><strong>Zeroth Law</strong><br><em style="color:#7a7a6e;font-size:11px;">Thermal Equilibrium</em></td>
+              <td>
+                If two systems are each in thermal equilibrium with a third, they are in thermal equilibrium with each other.
+                <div style="color:#B23A48;font-weight:700;margin-top:4px;">Φ<sub>A</sub> = Φ<sub>B</sub> ⟹ Φ<sub>A</sub> = Φ<sub>C</sub></div>
+              </td>
+              <td>
+                The candle (ITEM 2), the check valve (ITEM 8), and the copper tubing all reach a common thermal state via radiation and conduction. This defines the temperature reference for the cycle.
+              </td>
+            </tr>
+            <tr>
+              <td><strong style="color:#C87F4A;font-size:14px;">1</strong></td>
+              <td><strong>First Law</strong><br><em style="color:#7a7a6e;font-size:11px;">Conservation of Energy</em></td>
+              <td>
+                Energy cannot be created or destroyed, only transformed from one form to another.
+                <div style="color:#B23A48;font-weight:700;margin-top:4px;">ΔU = Q − W</div>
+              </td>
+              <td>
+                The candle supplies heat Q<sub>in</sub>. Part converts to work W (pressure rise), the rest raises internal energy ΔU. No energy is lost — it is redistributed.
+              </td>
+            </tr>
+            <tr>
+              <td><strong style="color:#C87F4A;font-size:14px;">2</strong></td>
+              <td><strong>Second Law</strong><br><em style="color:#7a7a6e;font-size:11px;">Heat Transfer Direction</em></td>
+              <td>
+                Heat flows spontaneously from a hotter body to a colder body, never the reverse.
+                <div style="color:#B23A48;font-weight:700;margin-top:4px;">∮ (δQ/T) ≤ 0 → ΔS ≥ 0</div>
+              </td>
+              <td>
+                Heat flows from flame → generator → capillary → evaporator, absorbing heat from the can. The cold can cannot re-heat the flame — this defines the cycle direction.
+              </td>
+            </tr>
+            <tr>
+              <td><strong style="color:#C87F4A;font-size:14px;">3</strong></td>
+              <td><strong>Third Law</strong><br><em style="color:#7a7a6e;font-size:11px;">Absolute Zero · Work as Energy</em></td>
+              <td>
+                As temperature approaches absolute zero (0 K), entropy approaches a minimum. Work is a form of energy transfer.
+                <div style="color:#B23A48;font-weight:700;margin-top:4px;">lim<sub>T→0</sub> S(T) = 0 &nbsp;·&nbsp; W = ∫ F·dx</div>
+              </td>
+              <td>
+                Theoretical lower bound for evaporator temperature is 0 K (−273.15 °C). In practice, the Pepsi can approaches ambient limits. Pressure work by vapor is a direct form of energy transfer.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="margin-top:20px;padding:15px;background:#faf8f2;border-left:4px solid #C87F4A;border-radius:4px;
+                    font-family:Consolas,monospace;font-size:11px;color:#2b3a55;direction:ltr;text-align:left;line-height:1.8;">
+          <strong style="color:#0F2A47;">PHYSICAL INTERPRETATION:</strong><br>
+          • The <strong>candle</strong> (ITEM 2) acts as <em>heat reservoir</em> — Q<sub>H</sub>.<br>
+          • The <strong>evaporator</strong> (ITEM 9) acts as <em>cold reservoir</em> — Q<sub>C</sub>.<br>
+          • <strong>Coefficient of Performance (COP):</strong><br>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#B23A48;font-weight:700;">COP<sub>ideal</sub> = T<sub>C</sub> / (T<sub>H</sub> − T<sub>C</sub>)</span><br>
+          • Any real cycle has <strong>COP<sub>actual</sub> &lt; COP<sub>ideal</sub></strong> due to friction and entropy increase.<br>
+          • <strong>Warning:</strong> Experimental educational prototype. Do not attempt gas charging without certified equipment.
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+    "d3": "https://cdn.jsdelivr.net/npm/d3@7/+esm"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+import * as d3 from 'd3';
+
+/* =========================================================
+   WebGL2 check
+   ========================================================= */
+function supportsWebGL2(){
+  try {
+    const c = document.createElement('canvas');
+    return !!(window.WebGL2RenderingContext && c.getContext('webgl2'));
+  } catch(e){ return false; }
+}
+if (!supportsWebGL2()){
+  document.getElementById('webgl-error').classList.add('show');
+  document.getElementById('loading').classList.add('hidden');
+  throw new Error('WebGL2 not supported');
+}
+
+/* =========================================================
+   Renderer
+   ========================================================= */
+const wrap = document.getElementById('canvas-wrap');
+const renderer = new THREE.WebGLRenderer({
+  antialias: true, alpha: false,
+  powerPreference: 'high-performance'
+});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(wrap.clientWidth, wrap.clientHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+wrap.appendChild(renderer.domElement);
+
+/* =========================================================
+   Scene
+   ========================================================= */
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0e13);
+scene.fog = new THREE.Fog(0x0b0e13, 140, 320);
+
+/* =========================================================
+   HDRI
+   ========================================================= */
+const pmrem = new THREE.PMREMGenerator(renderer);
+pmrem.compileEquirectangularShader();
+const HDRI_URL = 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr';
+
+const rgbeLoader = new RGBELoader();
+rgbeLoader.load(
+  HDRI_URL,
+  (texture) => {
+    texture.mapping = THREE.EquirectangularReflectionMapping;
+    const envMap = pmrem.fromEquirectangular(texture).texture;
+    scene.environment = envMap;
+    texture.dispose();
+    console.log('✅ HDRI محمّل');
+  },
+  undefined,
+  (err) => {
+    console.warn('⚠ فشل HDRI — fallback', err);
+    import('three/addons/environments/RoomEnvironment.js').then(({ RoomEnvironment }) => {
+      const envRT = pmrem.fromScene(new RoomEnvironment(), 0.04);
+      scene.environment = envRT.texture;
+    });
+  }
+);
+scene.environmentIntensity = 1.0;
+
+/* =========================================================
+   Camera + Controls
+   ========================================================= */
+const camera = new THREE.PerspectiveCamera(42, wrap.clientWidth / wrap.clientHeight, 0.1, 1000);
+camera.position.set(55, 45, 70);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.target.set(5, 15, 0);
+controls.minDistance = 20;
+controls.maxDistance = 220;
+controls.maxPolarAngle = Math.PI * 0.85;
+controls.minPolarAngle = Math.PI * 0.08;
+controls.update();
+
+/* =========================================================
+   Lighting
+   ========================================================= */
+const keyLight = new THREE.DirectionalLight(0xfff3e0, 2.2);
+keyLight.position.set(60, 90, 45);
+keyLight.castShadow = true;
+keyLight.shadow.mapSize.set(2048, 2048);
+keyLight.shadow.camera.near = 20;
+keyLight.shadow.camera.far = 260;
+keyLight.shadow.camera.left = -70;
+keyLight.shadow.camera.right = 70;
+keyLight.shadow.camera.top = 70;
+keyLight.shadow.camera.bottom = -70;
+keyLight.shadow.bias = -0.0005;
+keyLight.shadow.normalBias = 0.02;
+keyLight.shadow.radius = 2;
+scene.add(keyLight);
+
+const fillLight = new THREE.DirectionalLight(0x8fb8ff, 0.6);
+fillLight.position.set(-60, 40, -50);
+scene.add(fillLight);
+
+const rimLight = new THREE.DirectionalLight(0xffd9a0, 0.9);
+rimLight.position.set(-20, 20, -80);
+scene.add(rimLight);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.15));
+
+/* =========================================================
+   Normal Maps
+   ========================================================= */
+function createCopperNormalMap(size = 512){
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#8080ff';
+  ctx.fillRect(0, 0, size, size);
+  for (let i = 0; i < 800; i++){
+    const x = Math.random() * size, y = Math.random() * size;
+    const len = Math.random() * 40 + 5;
+    const angle = Math.random() * Math.PI * 2;
+    const r = 100 + Math.random() * 100, g = 100 + Math.random() * 100, b = 200 + Math.random() * 55;
+    ctx.strokeStyle = `rgba(${r},${g},${b},${0.2 + Math.random() * 0.3})`;
+    ctx.lineWidth = Math.random() * 1.5 + 0.3;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + Math.cos(angle) * len, y + Math.sin(angle) * len);
+    ctx.stroke();
+  }
+  const imgData = ctx.getImageData(0, 0, size, size);
+  const d = imgData.data;
+  for (let i = 0; i < d.length; i += 4){
+    const n = (Math.random() - 0.5) * 20;
+    d[i] = Math.max(0, Math.min(255, d[i] + n));
+    d[i + 1] = Math.max(0, Math.min(255, d[i + 1] + n));
+    d[i + 2] = 255;
+  }
+  ctx.putImageData(imgData, 0, 0);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(3, 1);
+  return texture;
+}
+
+function createRoughnessMap(size = 512){
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#555555';
+  ctx.fillRect(0, 0, size, size);
+  for (let i = 0; i < 300; i++){
+    const x = Math.random() * size, y = Math.random() * size, r = Math.random() * 30 + 5;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    const val = 80 + Math.random() * 100;
+    g.addColorStop(0, `rgba(${val},${val},${val},0.6)`);
+    g.addColorStop(1, `rgba(${val},${val},${val},0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(3, 1);
+  return texture;
+}
+
+const copperNormal = createCopperNormalMap(512);
+const copperRough  = createRoughnessMap(512);
+
+/* =========================================================
+   Materials
+   ========================================================= */
+const MAT = {
+  copper: new THREE.MeshPhysicalMaterial({
+    color: 0xb87333, metalness: 1.0, roughness: 0.28,
+    clearcoat: 0.15, clearcoatRoughness: 0.3, envMapIntensity: 1.4,
+    normalMap: copperNormal,
+    normalScale: new THREE.Vector2(0.25, 0.25),
+    roughnessMap: copperRough
+  }),
+  copperAged: new THREE.MeshPhysicalMaterial({
+    color: 0x8a4a1f, metalness: 1.0, roughness: 0.5, envMapIntensity: 1.1,
+    normalMap: copperNormal,
+    normalScale: new THREE.Vector2(0.4, 0.4),
+    roughnessMap: copperRough
+  }),
+  copperDark: new THREE.MeshPhysicalMaterial({
+    color: 0x8a4f22, metalness: 1.0, roughness: 0.42, envMapIntensity: 1.2
+  }),
+  brass: new THREE.MeshPhysicalMaterial({
+    color: 0xc9a227, metalness: 1.0, roughness: 0.22, envMapIntensity: 1.5
+  }),
+  steel: new THREE.MeshPhysicalMaterial({
+    color: 0xaaaaaa, metalness: 1.0, roughness: 0.35, envMapIntensity: 1.3
+  }),
+  wax: new THREE.MeshPhysicalMaterial({
+    color: 0xfff2c0, metalness: 0.0, roughness: 0.55, transmission: 0.15, thickness: 0.5
+  }),
+  wick: new THREE.MeshStandardMaterial({ color: 0x1a0e05, roughness: 0.9 }),
+  plate: new THREE.MeshPhysicalMaterial({
+    color: 0x2a2f3a, metalness: 0.9, roughness: 0.55
+  }),
+  board: new THREE.MeshPhysicalMaterial({
+    color: 0xe8d5a8, metalness: 0.0, roughness: 0.82
+  }),
+  woodBlock: new THREE.MeshPhysicalMaterial({
+    color: 0xc9a878, metalness: 0.0, roughness: 0.88
+  }),
+  canTop: new THREE.MeshPhysicalMaterial({
+    color: 0xc0c0c0, metalness: 1.0, roughness: 0.12, envMapIntensity: 1.8
+  })
+};
+
+/* =========================================================
+   Root group
+   ========================================================= */
+const group = new THREE.Group();
+scene.add(group);
+
+/* =========================================================
+   ITEM 1: Wood Base
+   ========================================================= */
+const BASE_W = 42, BASE_D = 24, BASE_H = 1.6;
+const board = new THREE.Mesh(new THREE.BoxGeometry(BASE_W, BASE_H, BASE_D, 4, 1, 4), MAT.board);
+board.receiveShadow = true;
+board.castShadow = true;
+group.add(board);
+const boardTopY = BASE_H / 2;
+
+/* =========================================================
+   ITEM 5: Condenser
+   ========================================================= */
+const blockCondenser = new THREE.Mesh(new THREE.BoxGeometry(6, 5, 6), MAT.woodBlock);
+blockCondenser.position.set(-13, boardTopY + 2.5, 5);
+blockCondenser.castShadow = true;
+blockCondenser.receiveShadow = true;
+group.add(blockCondenser);
+
+const COND_CENTER = new THREE.Vector3(-13, boardTopY + 10, 5);
+const COND_R = 3.2, COND_TURNS = 5, COND_PITCH = 0.9;
+const condPts = [];
+const condSegPerTurn = 60;
+for (let i = 0; i <= COND_TURNS * condSegPerTurn; i++){
+  const t = i / condSegPerTurn;
+  const angle = t * Math.PI * 2;
+  condPts.push(new THREE.Vector3(
+    COND_CENTER.x + COND_R * Math.cos(angle),
+    COND_CENTER.y - (COND_TURNS * COND_PITCH) / 2 + t * COND_PITCH,
+    COND_CENTER.z + COND_R * Math.sin(angle)
+  ));
+}
+const condCurve = new THREE.CatmullRomCurve3(condPts);
+const condenser = new THREE.Mesh(
+  new THREE.TubeGeometry(condCurve, COND_TURNS * condSegPerTurn * 2, 0.35, 14, false),
+  MAT.copper
+);
+condenser.castShadow = true;
+condenser.receiveShadow = true;
+group.add(condenser);
+const condTopY = COND_CENTER.y + (COND_TURNS * COND_PITCH) / 2;
+const condBottomY = COND_CENTER.y - (COND_TURNS * COND_PITCH) / 2;
+
+/* =========================================================
+   Condensation Drops
+   ========================================================= */
+const condensationDrops = new THREE.Group();
+const dropGeo = new THREE.SphereGeometry(0.08, 6, 4);
+const dropMat = new THREE.MeshPhysicalMaterial({
+  color: 0xdff6ff, metalness: 0.0, roughness: 0.05,
+  transmission: 0.9, thickness: 0.3, ior: 1.33,
+  transparent: true, opacity: 0.85
+});
+for (let i = 0; i < 60; i++){
+  const drop = new THREE.Mesh(dropGeo, dropMat);
+  const t = Math.random();
+  const pos = condCurve.getPointAt(t);
+  const tangent = condCurve.getTangentAt(t);
+  const up = new THREE.Vector3(0, 1, 0);
+  const right = new THREE.Vector3().crossVectors(tangent, up).normalize();
+  drop.position.copy(pos).add(right.multiplyScalar(0.35 + Math.random() * 0.15));
+  drop.position.y -= 0.15 + Math.random() * 0.2;
+  drop.scale.set(0.7 + Math.random() * 0.6, 0.9 + Math.random() * 0.8, 0.7 + Math.random() * 0.6);
+  drop.userData.basePos = drop.position.clone();
+  drop.userData.phase = Math.random() * Math.PI * 2;
+  drop.userData.speed = 0.5 + Math.random();
+  condensationDrops.add(drop);
+}
+condensationDrops.visible = false;
+group.add(condensationDrops);
+
+/* =========================================================
+   ITEM 9: Evaporator
+   ========================================================= */
+const EVAP_CENTER = new THREE.Vector3(12, boardTopY + 8.5, 0);
+const CAN_R = 4.5, CAN_H = 12;
+const EVAP_INNER_R = CAN_R + 0.5;
+const EVAP_TUBE_R  = 0.32;
+const EVAP_OUTER_R = EVAP_INNER_R + EVAP_TUBE_R;
+const EVAP_TURNS   = 14;
+const EVAP_PITCH   = 0.95;
+const EVAP_HEIGHT  = EVAP_TURNS * EVAP_PITCH;
+
+const helixPts = [];
+const ptsPerTurn = 48;
+for (let i = 0; i <= EVAP_TURNS * ptsPerTurn; i++){
+  const t = i / ptsPerTurn;
+  const angle = t * Math.PI * 2;
+  helixPts.push(new THREE.Vector3(
+    EVAP_CENTER.x + EVAP_OUTER_R * Math.cos(angle),
+    EVAP_CENTER.y - EVAP_HEIGHT / 2 + t * EVAP_PITCH,
+    EVAP_CENTER.z + EVAP_OUTER_R * Math.sin(angle)
+  ));
+}
+const evapCurve = new THREE.CatmullRomCurve3(helixPts);
+const evapGeo = new THREE.TubeGeometry(evapCurve, EVAP_TURNS * ptsPerTurn * 2, EVAP_TUBE_R, 14, false);
+
+const positions = evapGeo.attributes.position;
+const colors = new Float32Array(positions.count * 3);
+const colorTop = new THREE.Color(0xff4500);
+const colorMid = new THREE.Color(0xc87f4a);
+const colorBot = new THREE.Color(0x00b4d8);
+const tempColor = new THREE.Color();
+for (let i = 0; i < positions.count; i++){
+  const y = positions.getY(i);
+  const norm = (y - EVAP_CENTER.y + EVAP_HEIGHT / 2) / EVAP_HEIGHT;
+  if (norm > 0.5){
+    tempColor.copy(colorMid).lerp(colorTop, (norm - 0.5) * 2);
+  } else {
+    tempColor.copy(colorBot).lerp(colorMid, norm * 2);
+  }
+  colors[i * 3] = tempColor.r;
+  colors[i * 3 + 1] = tempColor.g;
+  colors[i * 3 + 2] = tempColor.b;
+}
+evapGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+const evapMat = new THREE.MeshPhysicalMaterial({
+  color: 0xffffff, vertexColors: true,
+  metalness: 1.0, roughness: 0.28, clearcoat: 0.15,
+  envMapIntensity: 1.4,
+  normalMap: copperNormal,
+  normalScale: new THREE.Vector2(0.25, 0.25)
+});
+const evapMesh = new THREE.Mesh(evapGeo, evapMat);
+evapMesh.castShadow = true;
+evapMesh.receiveShadow = true;
+group.add(evapMesh);
+const evapTopY    = EVAP_CENTER.y + EVAP_HEIGHT / 2;
+const evapBottomY = EVAP_CENTER.y - EVAP_HEIGHT / 2;
+
+/* =========================================================
+   ITEM 6: Copper tube + Capillary
+   ========================================================= */
+const item6Start = new THREE.Vector3(EVAP_CENTER.x, evapTopY + 0.5, EVAP_CENTER.z - EVAP_OUTER_R);
+const item6End = new THREE.Vector3(COND_CENTER.x + COND_R - 0.2, condTopY + 0.5, COND_CENTER.z);
+
+const copperTubePts = [
+  item6Start.clone(),
+  new THREE.Vector3(EVAP_CENTER.x + 0.5, evapTopY + 3, EVAP_CENTER.z - EVAP_OUTER_R - 1),
+  new THREE.Vector3(EVAP_CENTER.x - 1, evapTopY + 6, EVAP_CENTER.z - EVAP_OUTER_R - 3),
+  new THREE.Vector3(-2, evapTopY + 7.5, COND_CENTER.z + 1),
+  new THREE.Vector3(-8, condTopY + 2, COND_CENTER.z),
+  item6End.clone()
+];
+const copperTube = new THREE.Mesh(
+  new THREE.TubeGeometry(new THREE.CatmullRomCurve3(copperTubePts), 120, 0.35, 14, false),
+  MAT.copper
+);
+copperTube.castShadow = true;
+copperTube.receiveShadow = true;
+group.add(copperTube);
+
+const COIL_CENTER = new THREE.Vector3(-6, condTopY + 2.5, COND_CENTER.z);
+const COIL_R = 1.0, COIL_TURNS = 4, COIL_PITCH = 0.35, COIL_TUBE_R = 0.12;
+const coilPts = [];
+const coilSegPerTurn = 40;
+for (let i = 0; i <= COIL_TURNS * coilSegPerTurn; i++){
+  const t = i / coilSegPerTurn;
+  const angle = t * Math.PI * 2;
+  coilPts.push(new THREE.Vector3(
+    COIL_CENTER.x + COIL_R * Math.cos(angle),
+    COIL_CENTER.y - (COIL_TURNS * COIL_PITCH) / 2 + t * COIL_PITCH,
+    COIL_CENTER.z + COIL_R * Math.sin(angle)
+  ));
+}
+const capillaryCoil = new THREE.Mesh(
+  new THREE.TubeGeometry(new THREE.CatmullRomCurve3(coilPts), COIL_TURNS * coilSegPerTurn * 2, COIL_TUBE_R, 10, false),
+  MAT.copperAged
+);
+capillaryCoil.castShadow = true;
+group.add(capillaryCoil);
+
+const coilToCondPts = [
+  new THREE.Vector3(COIL_CENTER.x + COIL_R, COIL_CENTER.y, COIL_CENTER.z),
+  new THREE.Vector3(COIL_CENTER.x + 1.5, COIL_CENTER.y + 0.5, COND_CENTER.z),
+  new THREE.Vector3(COND_CENTER.x + COND_R - 0.3, condTopY + 0.5, COND_CENTER.z)
+];
+const coilToCond = new THREE.Mesh(
+  new THREE.TubeGeometry(new THREE.CatmullRomCurve3(coilToCondPts), 40, 0.35, 12, false),
+  MAT.copper
+);
+coilToCond.castShadow = true;
+group.add(coilToCond);
+
+/* =========================================================
+   Cold Glow
+   ========================================================= */
+const coldCanvas = document.createElement('canvas');
+coldCanvas.width = coldCanvas.height = 256;
+const cctx = coldCanvas.getContext('2d');
+const cgrad = cctx.createRadialGradient(128, 128, 8, 128, 128, 124);
+cgrad.addColorStop(0.0, 'rgba(0,180,216,0.55)');
+cgrad.addColorStop(1.0, 'rgba(0,180,216,0)');
+cctx.fillStyle = cgrad;
+cctx.fillRect(0, 0, 256, 256);
+const coldTex = new THREE.CanvasTexture(coldCanvas);
+coldTex.colorSpace = THREE.SRGBColorSpace;
+const coldGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+  map: coldTex, transparent: true,
+  blending: THREE.AdditiveBlending, depthWrite: false
+}));
+coldGlow.scale.set(16, 16, 1);
+coldGlow.position.copy(EVAP_CENTER);
+coldGlow.visible = false;
+group.add(coldGlow);
+
+/* =========================================================
+   Beverage Can
+   ========================================================= */
+const canGroup = new THREE.Group();
+const labelCanvas = document.createElement('canvas');
+labelCanvas.width = labelCanvas.height = 512;
+const lctx = labelCanvas.getContext('2d');
+lctx.fillStyle = '#C8102E';
+lctx.fillRect(0, 0, 512, 512);
+lctx.fillStyle = '#FFFFFF';
+lctx.font = 'bold 110px Arial';
+lctx.textAlign = 'center';
+lctx.textBaseline = 'middle';
+lctx.fillText('PEPSI', 256, 210);
+lctx.font = '52px Arial';
+lctx.fillText('330 ml', 256, 320);
+
+const labelTex = new THREE.CanvasTexture(labelCanvas);
+labelTex.colorSpace = THREE.SRGBColorSpace;
+labelTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+const canMatLabeled = new THREE.MeshPhysicalMaterial({
+  map: labelTex, metalness: 0.5, roughness: 0.28,
+  clearcoat: 0.7, clearcoatRoughness: 0.12, envMapIntensity: 1.2
+});
+const canBody = new THREE.Mesh(new THREE.CylinderGeometry(CAN_R, CAN_R, CAN_H, 48, 1), canMatLabeled);
+canBody.castShadow = true;
+canBody.receiveShadow = true;
+canGroup.add(canBody);
+
+const canTop = new THREE.Mesh(new THREE.CylinderGeometry(CAN_R, CAN_R, 0.4, 48), MAT.canTop);
+canTop.position.y = CAN_H / 2 + 0.2;
+canTop.castShadow = true;
+canGroup.add(canTop);
+
+const canBottom = new THREE.Mesh(new THREE.CylinderGeometry(CAN_R, CAN_R, 0.3, 48), MAT.canTop);
+canBottom.position.y = -CAN_H / 2 - 0.15;
+canBottom.castShadow = true;
+canGroup.add(canBottom);
+
+canGroup.position.copy(EVAP_CENTER);
+canGroup.visible = false;
+group.add(canGroup);
+
+/* =========================================================
+   ITEM 8: Check Valve
+   ========================================================= */
+const VALVE_POS = new THREE.Vector3(-2, boardTopY + 5, 3);
+const blockValve = new THREE.Mesh(new THREE.BoxGeometry(5, 3.5, 5), MAT.woodBlock);
+blockValve.position.set(-2, boardTopY + 1.75, 3);
+blockValve.castShadow = true;
+blockValve.receiveShadow = true;
+group.add(blockValve);
+
+const valveGroup = new THREE.Group();
+const valvePipe = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 5.5, 32), MAT.copper);
+valvePipe.rotation.z = Math.PI / 2;
+valvePipe.castShadow = true;
+valvePipe.receiveShadow = true;
+valveGroup.add(valvePipe);
+
+const flangeL = new THREE.Mesh(new THREE.CylinderGeometry(1.05, 1.05, 0.6, 32), MAT.copperDark);
+flangeL.rotation.z = Math.PI / 2;
+flangeL.position.set(-2.55, 0, 0);
+flangeL.castShadow = true;
+valveGroup.add(flangeL);
+const flangeR = flangeL.clone();
+flangeR.position.set(2.55, 0, 0);
+valveGroup.add(flangeR);
+
+const leftEnd = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.35, 0.9, 24), MAT.copperDark);
+leftEnd.rotation.z = Math.PI / 2;
+leftEnd.position.set(-3.2, 0, 0);
+leftEnd.castShadow = true;
+valveGroup.add(leftEnd);
+const rightEnd = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.55, 0.9, 24), MAT.copperDark);
+rightEnd.rotation.z = Math.PI / 2;
+rightEnd.position.set(3.2, 0, 0);
+rightEnd.castShadow = true;
+valveGroup.add(rightEnd);
+
+const fillPortBase = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.8, 20), MAT.brass);
+fillPortBase.position.set(0.8, 0.95, 0);
+fillPortBase.castShadow = true;
+valveGroup.add(fillPortBase);
+const fillTube = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 2.6, 20), MAT.brass);
+fillTube.position.set(0.8, 2.5, 0);
+fillTube.castShadow = true;
+valveGroup.add(fillTube);
+const fillCollar = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.35, 20), MAT.brass);
+fillCollar.position.set(0.8, 3.55, 0);
+valveGroup.add(fillCollar);
+
+const fillCapMat = new THREE.MeshPhysicalMaterial({
+  color: 0x1E7145, metalness: 0.7, roughness: 0.3, clearcoat: 0.5
+});
+const fillCap = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.52, 0.55, 20), fillCapMat);
+fillCap.position.set(0.8, 4.0, 0);
+fillCap.castShadow = true;
+valveGroup.add(fillCap);
+
+valveGroup.position.copy(VALVE_POS);
+group.add(valveGroup);
+
+/* =========================================================
+   Return path
+   ========================================================= */
+const returnPts = [
+  new THREE.Vector3(EVAP_CENTER.x, evapBottomY, EVAP_CENTER.z),
+  new THREE.Vector3(EVAP_CENTER.x, evapBottomY - 1.5, EVAP_CENTER.z),
+  new THREE.Vector3(EVAP_CENTER.x, boardTopY + 1, EVAP_CENTER.z - 2),
+  new THREE.Vector3(EVAP_CENTER.x - 4, boardTopY + 0.8, EVAP_CENTER.z - 4),
+  new THREE.Vector3(EVAP_CENTER.x - 8, boardTopY + 0.8, 2),
+  new THREE.Vector3(VALVE_POS.x + 3.2, VALVE_POS.y, VALVE_POS.z),
+  VALVE_POS.clone(),
+  new THREE.Vector3(VALVE_POS.x - 3.2, VALVE_POS.y, VALVE_POS.z),
+  new THREE.Vector3(-6, VALVE_POS.y + 1, 3),
+  new THREE.Vector3(-8, VALVE_POS.y + 3, 3.5),
+  new THREE.Vector3(-11, condBottomY + 1, COND_CENTER.z),
+  new THREE.Vector3(COND_CENTER.x - COND_R + 0.3, condBottomY, COND_CENTER.z)
+];
+const returnCurve = new THREE.CatmullRomCurve3(returnPts);
+const returnTube = new THREE.Mesh(
+  new THREE.TubeGeometry(returnCurve, 220, 0.4, 14, false),
+  MAT.copper
+);
+returnTube.castShadow = true;
+returnTube.receiveShadow = true;
+group.add(returnTube);
+
+/* =========================================================
+   ITEM 2: Candle
+   ========================================================= */
+const CANDLE_X = -2, CANDLE_Z = 3;
+const plateMat = new THREE.MeshPhysicalMaterial({
+  color: 0x2a2f3a, metalness: 0.85, roughness: 0.55
+});
+const plate = new THREE.Mesh(new THREE.BoxGeometry(6, 0.35, 6), plateMat);
+plate.position.set(CANDLE_X, boardTopY + 0.18, CANDLE_Z);
+plate.castShadow = true;
+plate.receiveShadow = true;
+group.add(plate);
+
+const screwMat = new THREE.MeshPhysicalMaterial({
+  color: 0x888888, metalness: 1.0, roughness: 0.25
+});
+[[-2.4, 0, -2.4], [2.4, 0, -2.4], [2.4, 0, 2.4], [-2.4, 0, 2.4]].forEach(([dx, dy, dz]) => {
+  const screw = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.15, 12), screwMat);
+  screw.position.set(CANDLE_X + dx, boardTopY + 0.35 + dy, CANDLE_Z + dz);
+  group.add(screw);
+});
+
+const candle = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 1.6, 48), MAT.wax);
+candle.position.set(CANDLE_X, boardTopY + 1.15, CANDLE_Z);
+candle.castShadow = true;
+candle.receiveShadow = true;
+group.add(candle);
+
+const candleRing = new THREE.Mesh(new THREE.CylinderGeometry(1.55, 1.55, 0.5, 48), MAT.steel);
+candleRing.position.set(CANDLE_X, boardTopY + 0.5, CANDLE_Z);
+candleRing.castShadow = true;
+group.add(candleRing);
+
+const wick = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.4, 6), MAT.wick);
+wick.position.set(CANDLE_X, boardTopY + 2.15, CANDLE_Z);
+group.add(wick);
+
+const flameLight = new THREE.PointLight(0xff8a2a, 0, 22, 2);
+flameLight.position.set(CANDLE_X, boardTopY + 2.5, CANDLE_Z);
+group.add(flameLight);
+
+const heatLight = new THREE.SpotLight(0xff6b1a, 0, 8, Math.PI / 6, 0.5, 1.5);
+heatLight.position.set(CANDLE_X, boardTopY + 2.5, CANDLE_Z);
+heatLight.target.position.set(CANDLE_X, VALVE_POS.y, CANDLE_Z);
+heatLight.castShadow = false;
+group.add(heatLight);
+group.add(heatLight.target);
+
+const flameCanvas = document.createElement('canvas');
+flameCanvas.width = flameCanvas.height = 128;
+const fctx = flameCanvas.getContext('2d');
+const fgrad = fctx.createRadialGradient(64, 85, 5, 64, 85, 62);
+fgrad.addColorStop(0.00, 'rgba(255,255,255,1)');
+fgrad.addColorStop(0.25, 'rgba(255,235,59,1)');
+fgrad.addColorStop(0.55, 'rgba(255,107,26,0.9)');
+fgrad.addColorStop(1.00, 'rgba(255,69,0,0)');
+fctx.fillStyle = fgrad;
+fctx.beginPath();
+fctx.arc(64, 85, 62, 0, Math.PI * 2);
+fctx.fill();
+const flameTex = new THREE.CanvasTexture(flameCanvas);
+flameTex.colorSpace = THREE.SRGBColorSpace;
+
+const flameSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+  map: flameTex, transparent: true,
+  blending: THREE.AdditiveBlending, depthWrite: false
+}));
+flameSprite.scale.set(2.6, 2.6, 1);
+flameSprite.position.set(CANDLE_X, boardTopY + 2.6, CANDLE_Z);
+flameSprite.visible = false;
+group.add(flameSprite);
+
+/* =========================================================
+   Flow Particles
+   ========================================================= */
+const FLOW_PARTICLE_COUNT = 60;
+const coldFlowCurve = new THREE.CatmullRomCurve3([
+  item6End.clone(),
+  new THREE.Vector3(-8, condTopY + 2, COND_CENTER.z),
+  new THREE.Vector3(-2, evapTopY + 7.5, COND_CENTER.z + 1),
+  new THREE.Vector3(EVAP_CENTER.x - 1, evapTopY + 6, EVAP_CENTER.z - EVAP_OUTER_R - 3),
+  new THREE.Vector3(EVAP_CENTER.x + 0.5, evapTopY + 3, EVAP_CENTER.z - EVAP_OUTER_R - 1),
+  item6Start.clone()
+]);
+const hotFlowCurve = returnCurve;
+
+const coldParticleGeo = new THREE.SphereGeometry(0.18, 8, 6);
+const coldParticleMat = new THREE.MeshBasicMaterial({ color: 0x00B4D8, transparent: true, opacity: 0.9 });
+const hotParticleGeo = new THREE.SphereGeometry(0.18, 8, 6);
+const hotParticleMat = new THREE.MeshBasicMaterial({ color: 0xFF4500, transparent: true, opacity: 0.9 });
+
+const coldParticles = [];
+const hotParticles = [];
+for (let i = 0; i < FLOW_PARTICLE_COUNT / 2; i++){
+  const p = new THREE.Mesh(coldParticleGeo, coldParticleMat.clone());
+  p.userData.offset = i / (FLOW_PARTICLE_COUNT / 2);
+  p.userData.curve = coldFlowCurve;
+  p.userData.speed = 0.06 + Math.random() * 0.02;
+  coldParticles.push(p);
+  group.add(p);
+}
+for (let i = 0; i < FLOW_PARTICLE_COUNT / 2; i++){
+  const p = new THREE.Mesh(hotParticleGeo, hotParticleMat.clone());
+  p.userData.offset = i / (FLOW_PARTICLE_COUNT / 2);
+  p.userData.curve = hotFlowCurve;
+  p.userData.speed = 0.04 + Math.random() * 0.02;
+  hotParticles.push(p);
+  group.add(p);
+}
+
+/* =========================================================
+   Heat Glow
+   ========================================================= */
+const heatGlowCanvas = document.createElement('canvas');
+heatGlowCanvas.width = heatGlowCanvas.height = 256;
+const hctx = heatGlowCanvas.getContext('2d');
+const hgrad = hctx.createRadialGradient(128, 128, 20, 128, 128, 124);
+hgrad.addColorStop(0.0, 'rgba(255,69,0,0.4)');
+hgrad.addColorStop(0.5, 'rgba(255,107,26,0.15)');
+hgrad.addColorStop(1.0, 'rgba(255,69,0,0)');
+hctx.fillStyle = hgrad;
+hctx.fillRect(0, 0, 256, 256);
+const heatGlowTex = new THREE.CanvasTexture(heatGlowCanvas);
+heatGlowTex.colorSpace = THREE.SRGBColorSpace;
+const heatGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+  map: heatGlowTex, transparent: true,
+  blending: THREE.AdditiveBlending, depthWrite: false
+}));
+heatGlow.scale.set(8, 8, 1);
+heatGlow.position.set(CANDLE_X, boardTopY + 3, CANDLE_Z);
+heatGlow.visible = false;
+group.add(heatGlow);
+
+/* =========================================================
+   ITEM 7: Clamps
+   ========================================================= */
+const clampsGroup = new THREE.Group();
+[[-13, boardTopY + 0.4, 5], [12, boardTopY + 0.4, 4], [0, boardTopY + 0.4, 6], [-2, boardTopY + 0.4, -3]]
+  .forEach(([x, y, z]) => {
+    const clamp = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.16, 8, 20), MAT.steel);
+    clamp.position.set(x, y, z);
+    clamp.rotation.x = Math.PI / 2;
+    clamp.castShadow = true;
+    clampsGroup.add(clamp);
+  });
+group.add(clampsGroup);
+
+/* =========================================================
+   Ground + Grid
+   ========================================================= */
+const groundMat = new THREE.MeshPhysicalMaterial({
+  color: 0x10141a, roughness: 0.95, metalness: 0.0
+});
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -0.91;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const grid = new THREE.GridHelper(200, 100, 0x2a3140, 0x1a1f28);
+grid.material.transparent = true;
+grid.material.opacity = 0.35;
+grid.position.y = -0.9;
+scene.add(grid);
+
+/* =========================================================
+   Labels
+   ========================================================= */
+function makeLabel(text, position){
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 96;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = 'rgba(15,20,28,0.9)';
+  if (ctx.roundRect) {
+    ctx.beginPath();
+    ctx.roundRect(0, 0, 256, 96, 18);
+    ctx.fill();
+  } else {
+    ctx.fillRect(0, 0, 256, 96);
+  }
+  ctx.strokeStyle = '#f0a860';
+  ctx.lineWidth = 5;
+  ctx.stroke();
+  ctx.fillStyle = '#f0a860';
+  ctx.font = 'bold 52px Segoe UI, Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, 128, 48);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, depthWrite: false });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(3.6, 1.35, 1);
+  sprite.position.copy(position);
+  sprite.renderOrder = 999;
+  return sprite;
+}
+
+group.add(makeLabel('1', new THREE.Vector3(-24, 2, 12)));
+group.add(makeLabel('2', new THREE.Vector3(CANDLE_X - 1, boardTopY + 0.2, CANDLE_Z + 4)));
+group.add(makeLabel('5', new THREE.Vector3(COND_CENTER.x - 2, condTopY + 4, COND_CENTER.z)));
+group.add(makeLabel('6', new THREE.Vector3(COIL_CENTER.x, COIL_CENTER.y + 3, COIL_CENTER.z)));
+group.add(makeLabel('7', new THREE.Vector3(0, boardTopY + 3, 8)));
+group.add(makeLabel('8', new THREE.Vector3(VALVE_POS.x, VALVE_POS.y + 6, VALVE_POS.z)));
+group.add(makeLabel('9', new THREE.Vector3(EVAP_CENTER.x + 6, EVAP_CENTER.y + 2, EVAP_CENTER.z)));
+
+/* =========================================================
+   State
+   ========================================================= */
+const state = {
+  flameOn: false, coolingOn: false, autoRotate: false,
+  canInserted: false, tourActive: false,
+  flowActive: false, heatActive: false
+};
+
+function showToast(msg){
+  document.querySelectorAll('.toast').forEach(t => t.remove());
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2200);
+}
+
+/* =========================================================
+   Buttons
+   ========================================================= */
+const btnFlame  = document.getElementById('btnFlame');
+const btnCool   = document.getElementById('btnCool');
+const btnCan    = document.getElementById('btnCan');
+const btnFlow   = document.getElementById('btnFlow');
+const btnHeat   = document.getElementById('btnHeat');
+const btnRotate = document.getElementById('btnRotate');
+const btnTour   = document.getElementById('btnTour');
+const btnBlueprint = document.getElementById('btnBlueprint');
+const btnReset  = document.getElementById('btnReset');
+
+btnFlame.addEventListener('click', () => {
+  state.flameOn = !state.flameOn;
+  flameSprite.visible = state.flameOn;
+  heatGlow.visible = state.flameOn && state.heatActive;
+  flameLight.intensity = state.flameOn ? 3.5 : 0;
+  heatLight.intensity = state.flameOn ? 4.0 : 0;
+  btnFlame.classList.toggle('btn-active', state.flameOn);
+  showToast(state.flameOn ? '🔥 تم إشعال الشمعة' : '❄️ تم إطفاء الشمعة');
+});
+
+btnCool.addEventListener('click', () => {
+  state.coolingOn = !state.coolingOn;
+  coldGlow.visible = state.coolingOn;
+  condensationDrops.visible = state.coolingOn;
+  btnCool.classList.toggle('btn-active', state.coolingOn);
+  showToast(state.coolingOn ? '❄️ بدأ التبريد' : '⏹ توقف التبريد');
+});
+
+btnCan.addEventListener('click', () => {
+  state.canInserted = !state.canInserted;
+  canGroup.visible = state.canInserted;
+  btnCan.classList.toggle('btn-active', state.canInserted);
+  showToast(state.canInserted ? '🥤 تم إدخال العبوة' : '❌ تم إخراج العبوة');
+  if (state.canInserted && !state.coolingOn){
+    state.coolingOn = true;
+    coldGlow.visible = true;
+    condensationDrops.visible = true;
+    btnCool.classList.add('btn-active');
+  }
+});
+
+btnFlow.addEventListener('click', () => {
+  state.flowActive = !state.flowActive;
+  btnFlow.classList.toggle('btn-active', state.flowActive);
+  showToast(state.flowActive ? '🌊 جزيئات التدفق مفعّلة' : '⏹ إيقاف الجزيئات');
+});
+
+btnHeat.addEventListener('click', () => {
+  state.heatActive = !state.heatActive;
+  heatGlow.visible = state.heatActive && state.flameOn;
+  btnHeat.classList.toggle('btn-active', state.heatActive);
+  showToast(state.heatActive ? '🌡️ تدرج حراري مفعّل' : '⏹ إيقاف التدرج');
+});
+
+btnRotate.addEventListener('click', () => {
+  state.autoRotate = !state.autoRotate;
+  controls.autoRotate = state.autoRotate;
+  controls.autoRotateSpeed = 1.2;
+  btnRotate.classList.toggle('btn-active', state.autoRotate);
+  showToast(state.autoRotate ? '🔄 تدوير تلقائي' : '⏸ إيقاف التدوير');
+});
+
+/* =========================================================
+   Cinematic Tour
+   ========================================================= */
+const TOUR_KEYFRAMES = [
+  { t: 0.00, pos: [55, 45, 70],   target: [0, 10, 0] },
+  { t: 0.12, pos: [22, 22, 25],   target: [EVAP_CENTER.x, EVAP_CENTER.y, EVAP_CENTER.z] },
+  { t: 0.25, pos: [COIL_CENTER.x + 5, COIL_CENTER.y + 2, COIL_CENTER.z + 6],
+            target: [COIL_CENTER.x, COIL_CENTER.y, COIL_CENTER.z] },
+  { t: 0.40, pos: [CANDLE_X + 6, 6, CANDLE_Z + 7],
+            target: [CANDLE_X, boardTopY + 2, CANDLE_Z] },
+  { t: 0.55, pos: [COND_CENTER.x - 8, condTopY + 5, COND_CENTER.z + 8],
+            target: [COND_CENTER.x, COND_CENTER.y, COND_CENTER.z] },
+  { t: 0.70, pos: [10, 10, 15],   target: [VALVE_POS.x, VALVE_POS.y, VALVE_POS.z] },
+  { t: 0.85, pos: [18, 35, 20],   target: [0, 10, 0] },
+  { t: 1.00, pos: [55, 45, 70],   target: [0, 10, 0] }
+];
+
+let tourStartTime = 0;
+const TOUR_DURATION = 20000;
+
+btnTour.addEventListener('click', () => {
+  state.tourActive = !state.tourActive;
+  btnTour.classList.toggle('btn-active', state.tourActive);
+  if (state.tourActive){
+    tourStartTime = performance.now();
+    controls.enabled = false;
+    showToast('🎬 جولة سينمائية (20 ث)');
+  } else {
+    controls.enabled = true;
+    showToast('🎬 تم إيقاف الجولة');
+  }
+});
+
+function updateTour(now){
+  const elapsed = (now - tourStartTime) / TOUR_DURATION;
+  const t = elapsed - Math.floor(elapsed);
+  let a = TOUR_KEYFRAMES[0], b = TOUR_KEYFRAMES[1];
+  for (let i = 0; i < TOUR_KEYFRAMES.length - 1; i++){
+    if (t >= TOUR_KEYFRAMES[i].t && t <= TOUR_KEYFRAMES[i + 1].t){
+      a = TOUR_KEYFRAMES[i];
+      b = TOUR_KEYFRAMES[i + 1];
+      break;
+    }
+  }
+  const span = (b.t - a.t) || 1;
+  const k = (t - a.t) / span;
+  const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+  camera.position.set(
+    a.pos[0] + (b.pos[0] - a.pos[0]) * e,
+    a.pos[1] + (b.pos[1] - a.pos[1]) * e,
+    a.pos[2] + (b.pos[2] - a.pos[2]) * e
+  );
+  controls.target.set(
+    a.target[0] + (b.target[0] - a.target[0]) * e,
+    a.target[1] + (b.target[1] - a.target[1]) * e,
+    a.target[2] + (b.target[2] - a.target[2]) * e
+  );
+}
+
+/* =========================================================
+   🆕 Blueprint Modal + Tabs
+   ========================================================= */
+const blueprintModal = document.getElementById('blueprint-modal');
+const btnPrint = document.getElementById('btnPrint');
+const btnDownloadSVG = document.getElementById('btnDownloadSVG');
+const btnCloseBP = document.getElementById('btnCloseBP');
+
+// 🆕 Tabs switching
+document.querySelectorAll('.bp-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    const target = tab.dataset.tab;
+    document.querySelectorAll('.bp-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.bp-panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-' + target).classList.add('active');
+
+    // 🆕 إنشاء P-H Diagram عند فتح تبويبه لأول مرة
+    if (target === 'ph' && !window.phChartInitialized){
+      setTimeout(() => {
+        drawPHDiagram();
+        window.phChartInitialized = true;
+      }, 50);
+    }
+  });
+});
+
+btnBlueprint.addEventListener('click', () => {
+  blueprintModal.classList.add('show');
+  showToast('📐 تم فتح Blueprint + P-H Diagram');
+});
+
+btnCloseBP.addEventListener('click', () => {
+  blueprintModal.classList.remove('show');
+});
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && blueprintModal.classList.contains('show')){
+    blueprintModal.classList.remove('show');
+  }
+});
+
+btnPrint.addEventListener('click', () => {
+  window.print();
+});
+
+btnDownloadSVG.addEventListener('click', () => {
+  const svgEl = document.getElementById('blueprint-svg');
+  const svgData = new XMLSerializer().serializeToString(svgEl);
+  const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'Absorption_Refrigeration_Blueprint_RevN.svg';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+  showToast('💾 تم تحميل المخطط بنجاح');
+});
+
+/* =========================================================
+   🆕 P-H Diagram (D3.js) — Interactive Pressure-Enthalpy
+   ========================================================= */
+function drawPHDiagram(){
+  const container = document.getElementById('ph-chart');
+  if (!container) return;
+
+  const width  = container.clientWidth  || 1200;
+  const height = container.clientHeight || 600;
+  const margin = { top: 30, right: 40, bottom: 60, left: 80 };
+  const innerW = width  - margin.left - margin.right;
+  const innerH = height - margin.top  - margin.bottom;
+
+  // Clear previous
+  d3.select(container).selectAll('*').remove();
+
+  const svg = d3.select(container)
+    .append('svg')
+    .attr('viewBox', `0 0 ${width} ${height}`)
+    .attr('preserveAspectRatio', 'xMidYMid meet');
+
+  const g = svg.append('g')
+    .attr('transform', `translate(${margin.left},${margin.top})`);
+
+  // ============ Scales ============
+  // X: Enthalpy (kJ/kg) — 200 to 500
+  const x = d3.scaleLinear()
+    .domain([200, 500])
+    .range([0, innerW]);
+
+  // Y: Pressure (bar) — logarithmic 1 to 20
+  const y = d3.scaleLog()
+    .domain([1, 20])
+    .range([innerH, 0]);
+
+  // ============ Grid lines ============
+  // Vertical grid (enthalpy)
+  const xTicks = d3.range(200, 501, 25);
+  g.append('g')
+    .selectAll('line.xgrid')
+    .data(xTicks)
+    .enter()
+    .append('line')
+    .attr('class', 'xgrid')
+    .attr('x1', d => x(d))
+    .attr('x2', d => x(d))
+    .attr('y1', 0)
+    .attr('y2', innerH)
+    .attr('stroke', '#e8e8e8')
+    .attr('stroke-dasharray', '3,3');
+
+  // Horizontal grid (pressure)
+  const yTicks = [1, 1.5, 2, 3, 5, 7, 10, 15, 20];
+  g.append('g')
+    .selectAll('line.ygrid')
+    .data(yTicks)
+    .enter()
+    .append('line')
+    .attr('class', 'ygrid')
+    .attr('x1', 0)
+    .attr('x2', innerW)
+    .attr('y1', d => y(d))
+    .attr('y2', d => y(d))
+    .attr('stroke', '#e8e8e8')
+    .attr('stroke-dasharray', '3,3');
+
+  // ============ Axes ============
+  const xAxis = d3.axisBottom(x)
+    .tickValues(d3.range(200, 501, 25))
+    .tickFormat(d => d);
+  g.append('g')
+    .attr('transform', `translate(0,${innerH})`)
+    .call(xAxis)
+    .style('font-size', '11px')
+    .style('font-family', 'Consolas, monospace')
+    .style('font-weight', '600');
+
+  const yAxis = d3.axisLeft(y)
+    .tickValues(yTicks)
+    .tickFormat(d => d);
+  g.append('g')
+    .call(yAxis)
+    .style('font-size', '11px')
+    .style('font-family', 'Consolas, monospace')
+    .style('font-weight', '600');
+
+  // Axis labels
+  svg.append('text')
+    .attr('x', width / 2)
+    .attr('y', height - 15)
+    .attr('text-anchor', 'middle')
+    .attr('font-size', 13)
+    .attr('font-weight', 700)
+    .attr('fill', '#0F2A47')
+    .attr('font-family', 'Consolas, monospace')
+    .text('Specific Enthalpy h (kJ/kg)');
+
+  svg.append('text')
+    .attr('x', 20)
+    .attr('y', height / 2)
+    .attr('transform', `rotate(-90,20,${height/2})`)
+    .attr('text-anchor', 'middle')
+    .attr('font-size', 13)
+    .attr('font-weight', 700)
+    .attr('fill', '#0F2A47')
+    .attr('font-family', 'Consolas, monospace')
+    .text('Pressure P (bar) — log scale');
+
+  // ============ Saturation Dome (approximate) ============
+  // Saturated liquid line (left side of dome)
+  const satLiquidPoints = [
+    { h: 200, p: 1 },     { h: 210, p: 1.5 },  { h: 220, p: 2 },
+    { h: 232, p: 3 },     { h: 243, p: 5 },    { h: 250, p: 7 },
+    { h: 258, p: 10 },    { h: 270, p: 15 },   { h: 280, p: 20 }
+  ];
+
+  // Saturated vapor line (right side of dome)
+  const satVaporPoints = [
+    { h: 395, p: 1 },     { h: 393, p: 1.5 },  { h: 390, p: 2 },
+    { h: 385, p: 3 },     { h: 378, p: 5 },    { h: 372, p: 7 },
+    { h: 365, p: 10 },    { h: 355, p: 15 },   { h: 348, p: 20 }
+  ];
+
+  // Draw Saturated Liquid Line
+  const liquidLine = d3.line()
+    .x(d => x(d.h))
+    .y(d => y(d.p))
+    .curve(d3.curveMonotoneX);
+
+  g.append('path')
+    .datum(satLiquidPoints)
+    .attr('d', liquidLine)
+    .attr('fill', 'none')
+    .attr('stroke', '#1E7145')
+    .attr('stroke-width', 3)
+    .attr('stroke-dasharray', '6,3');
+
+  // Draw Saturated Vapor Line
+  g.append('path')
+    .datum(satVaporPoints)
+    .attr('d', liquidLine)
+    .attr('fill', 'none')
+    .attr('stroke', '#B23A48')
+    .attr('stroke-width', 3)
+    .attr('stroke-dasharray', '6,3');
+
+  // Labels
+  g.append('text')
+    .attr('x', x(215))
+    .attr('y', y(1.3) + 20)
+    .attr('fill', '#1E7145')
+    .attr('font-size', 11)
+    .attr('font-weight', 700)
+    .attr('font-family', 'Consolas, monospace')
+    .text('Saturated Liquid');
+
+  g.append('text')
+    .attr('x', x(378))
+    .attr('y', y(1.3) + 20)
+    .attr('fill', '#B23A48')
+    .attr('font-size', 11)
+    .attr('font-weight', 700)
+    .attr('font-family', 'Consolas, monospace')
+    .text('Saturated Vapor');
+
+  // ============ Cycle Points ============
+  const cyclePoints = [
+    { id: 1, h: 395, p: 2.0,  t: -10, s: 1.73, label: '1', state: 'Sat. Vapor',      color: '#00B4D8' },
+    { id: 2, h: 435, p: 10.0, t:  45, s: 1.73, label: '2', state: 'Superheated',     color: '#FF4500' },
+    { id: 3, h: 250, p: 10.0, t:  40, s: 1.20, label: '3', state: 'Sat. Liquid',     color: '#B8860B' },
+    { id: 4, h: 250, p: 2.0,  t: -10, s: 1.28, label: '4', state: 'Liquid-Vapor Mix', color: '#9C27B0' }
+  ];
+
+  // ============ Cycle Paths ============
+  // 1 → 2: Compression (curved)
+  const path12 = d3.line()
+    .x(d => x(d.h))
+    .y(d => y(d.p))
+    .curve(d3.curveMonotoneX);
+
+  g.append('path')
+    .datum([cyclePoints[0], { h: 420, p: 5 }, cyclePoints[1]])
+    .attr('d', path12)
+    .attr('fill', 'none')
+    .attr('stroke', '#FF4500')
+    .attr('stroke-width', 3);
+
+  // 2 → 3: Condensation (horizontal at P=10)
+  g.append('line')
+    .attr('x1', x(cyclePoints[1].h))
+    .attr('y1', y(cyclePoints[1].p))
+    .attr('x2', x(cyclePoints[2].h))
+    .attr('y2', y(cyclePoints[2].p))
+    .attr('stroke', '#B8860B')
+    .attr('stroke-width', 3);
+
+  // 3 → 4: Expansion (vertical, isenthalpic)
+  g.append('line')
+    .attr('x1', x(cyclePoints[2].h))
+    .attr('y1', y(cyclePoints[2].p))
+    .attr('x2', x(cyclePoints[3].h))
+    .attr('y2', y(cyclePoints[3].p))
+    .attr('stroke', '#9C27B0')
+    .attr('stroke-width', 3)
+    .attr('stroke-dasharray', '5,3');
+
+  // 4 → 1: Evaporation (horizontal at P=2)
+  g.append('line')
+    .attr('x1', x(cyclePoints[3].h))
+    .attr('y1', y(cyclePoints[3].p))
+    .attr('x2', x(cyclePoints[0].h))
+    .attr('y2', y(cyclePoints[0].p))
+    .attr('stroke', '#00B4D8')
+    .attr('stroke-width', 3);
+
+  // ============ Cycle Point Markers ============
+  const pointGroup = g.selectAll('.cyclePoint')
+    .data(cyclePoints)
+    .enter()
+    .append('g')
+    .attr('class', 'cyclePoint')
+    .attr('transform', d => `translate(${x(d.h)},${y(d.p)})`);
+
+  // Outer glow
+  pointGroup.append('circle')
+    .attr('r', 18)
+    .attr('fill', d => d.color)
+    .attr('opacity', 0.2);
+
+  // Main circle
+  pointGroup.append('circle')
+    .attr('r', 11)
+    .attr('fill', d => d.color)
+    .attr('stroke', '#fff')
+    .attr('stroke-width', 3)
+    .style('cursor', 'pointer');
+
+  // Number inside
+  pointGroup.append('text')
+    .attr('text-anchor', 'middle')
+    .attr('dy', '0.35em')
+    .attr('fill', '#fff')
+    .attr('font-size', 14)
+    .attr('font-weight', 900)
+    .attr('font-family', 'Consolas, monospace')
+    .text(d => d.label);
+
+  // Tooltip group (hidden by default)
+  const tooltip = svg.append('g')
+    .attr('class', 'tooltip')
+    .style('display', 'none')
+    .style('pointer-events', 'none');
+
+  tooltip.append('rect')
+    .attr('rx', 6)
+    .attr('ry', 6)
+    .attr('fill', 'rgba(15, 42, 71, 0.95)')
+    .attr('stroke', '#C87F4A')
+    .attr('stroke-width', 2);
+
+  const tooltipText = tooltip.append('text')
+    .attr('fill', '#fff')
+    .attr('font-family', 'Consolas, monospace')
+    .attr('font-size', 12);
+
+  // Hover events
+  pointGroup
+    .on('mouseover', function(event, d){
+      d3.select(this).select('circle').transition().duration(200).attr('r', 15);
+
+      const lines = [
+        `Point ${d.label}: ${d.state}`,
+        `P = ${d.p} bar`,
+        `h = ${d.h} kJ/kg`,
+        `T = ${d.t} °C`,
+        `s = ${d.s} kJ/kg·K`
+      ];
+
+      tooltipText.selectAll('tspan').remove();
+      lines.forEach((line, i) => {
+        tooltipText.append('tspan')
+          .attr('x', 12)
+          .attr('dy', i === 0 ? 20 : 16)
+          .attr('font-weight', i === 0 ? 700 : 400)
+          .attr('fill', i === 0 ? d.color : '#fff')
+          .text(line);
+      });
+
+      const bbox = tooltipText.node().getBBox();
+      tooltip.select('rect')
+        .attr('width', bbox.width + 24)
+        .attr('height', bbox.height + 16);
+
+      // Position tooltip near cursor
+      const [mx, my] = d3.pointer(event, svg.node());
+      const tw = bbox.width + 24;
+      const th = bbox.height + 16;
+      const finalX = mx + 15 + tw > width ? mx - tw - 15 : mx + 15;
+      const finalY = my + 15 + th > height ? my - th - 15 : my + 15;
+
+      tooltip
+        .attr('transform', `translate(${finalX},${finalY})`)
+        .style('display', null);
+    })
+    .on('mouseout', function(){
+      d3.select(this).select('circle').transition().duration(200).attr('r', 11);
+      tooltip.style('display', 'none');
+    });
+
+  // ============ Direction arrows ============
+  // Arrow on 1→2
+  const arrow12 = g.append('g');
+  const mid12 = { h: 415, p: 4.5 };
+  arrow12.append('polygon')
+    .attr('points', '-6,-4 6,0 -6,4')
+    .attr('fill', '#FF4500')
+    .attr('transform', `translate(${x(mid12.h)},${y(mid12.p)}) rotate(${-60})`);
+
+  // Arrow on 2→3
+  const arrow23 = g.append('g');
+  const mid23 = { h: 335, p: 10 };
+  arrow23.append('polygon')
+    .attr('points', '-6,-4 6,0 -6,4')
+    .attr('fill', '#B8860B')
+    .attr('transform', `translate(${x(mid23.h)},${y(mid23.p)}) rotate(180)`);
+
+  // Arrow on 3→4
+  const arrow34 = g.append('g');
+  const mid34 = { h: 250, p: 4.5 };
+  arrow34.append('polygon')
+    .attr('points', '-6,-4 6,0 -6,4')
+    .attr('fill', '#9C27B0')
+    .attr('transform', `translate(${x(mid34.h)},${y(mid34.p)}) rotate(90)`);
+
+  // Arrow on 4→1
+  const arrow41 = g.append('g');
+  const mid41 = { h: 320, p: 2 };
+  arrow41.append('polygon')
+    .attr('points', '-6,-4 6,0 -6,4')
+    .attr('fill', '#00B4D8')
+    .attr('transform', `translate(${x(mid41.h)},${y(mid41.p)}) rotate(0)`);
+
+  // ============ Legend ============
+  const legend = svg.append('g')
+    .attr('transform', `translate(${width - 260}, 60)`);
+
+  const legendItems = [
+    { color: '#FF4500', label: '1→2 Compression' },
+    { color: '#B8860B', label: '2→3 Condensation' },
+    { color: '#9C27B0', label: '3→4 Expansion' },
+    { color: '#00B4D8', label: '4→1 Evaporation' }
+  ];
+
+  legend.append('rect')
+    .attr('x', -10)
+    .attr('y', -25)
+    .attr('width', 240)
+    .attr('height', legendItems.length * 22 + 20)
+    .attr('fill', 'rgba(255,255,255,0.95)')
+    .attr('stroke', '#0F2A47')
+    .attr('stroke-width', 2)
+    .attr('rx', 6);
+
+  legend.append('text')
+    .attr('x', 0)
+    .attr('y', -8)
+    .attr('font-size', 12)
+    .attr('font-weight', 700)
+    .attr('fill', '#0F2A47')
+    .attr('font-family', 'Consolas, monospace')
+    .text('CYCLE LEGEND');
+
+  legendItems.forEach((item, i) => {
+    const rowY = i * 22 + 12;
+    legend.append('line')
+      .attr('x1', 0)
+      .attr('x2', 24)
+      .attr('y1', rowY)
+      .attr('y2', rowY)
+      .attr('stroke', item.color)
+      .attr('stroke-width', 3);
+    legend.append('text')
+      .attr('x', 30)
+      .attr('y', rowY + 4)
+      .attr('font-size', 11)
+      .attr('fill', '#2b3a55')
+      .attr('font-family', 'Consolas, monospace')
+      .text(item.label);
+  });
+}
+
+// Redraw P-H on resize if visible
+window.addEventListener('resize', () => {
+  const phPanel = document.getElementById('panel-ph');
+  if (phPanel && phPanel.classList.contains('active')){
+    drawPHDiagram();
+  }
+});
+
+/* =========================================================
+   Reset
+   ========================================================= */
+btnReset.addEventListener('click', () => {
+  state.flameOn = false;
+  state.coolingOn = false;
+  state.autoRotate = false;
+  state.canInserted = false;
+  state.tourActive = false;
+  state.flowActive = false;
+  state.heatActive = false;
+
+  flameSprite.visible = false;
+  coldGlow.visible = false;
+  canGroup.visible = false;
+  heatGlow.visible = false;
+  condensationDrops.visible = false;
+  flameLight.intensity = 0;
+  heatLight.intensity = 0;
+
+  controls.autoRotate = false;
+  controls.enabled = true;
+  controls.target.set(0, 10, 0);
+  camera.position.set(55, 45, 70);
+  controls.update();
+
+  document.querySelectorAll('.controls button').forEach(b => b.classList.remove('btn-active'));
+  showToast('🔄 تم إعادة التعيين');
+});
+
+/* =========================================================
+   Resize
+   ========================================================= */
+function onResize(){
+  const w = wrap.clientWidth;
+  const h = wrap.clientHeight;
+  if (w === 0 || h === 0) return;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+}
+window.addEventListener('resize', onResize);
+window.addEventListener('orientationchange', () => setTimeout(onResize, 200));
+
+/* =========================================================
+   Animation Loop
+   ========================================================= */
+let lastTime = performance.now();
+let frames = 0, fpsAccum = 0;
+
+const fpsEl   = document.getElementById('fps');
+const drawsEl = document.getElementById('draws');
+const trisEl  = document.getElementById('tris');
+
+function animate(now){
+  requestAnimationFrame(animate);
+  const dt = Math.min((now - lastTime) / 1000, 0.1);
+  lastTime = now;
+  const timeSec = now * 0.001;
+
+  frames++;
+  fpsAccum += dt;
+  if (fpsAccum >= 0.5){
+    fpsEl.textContent = Math.round(frames / fpsAccum);
+    drawsEl.textContent = renderer.info.render.calls;
+    trisEl.textContent = renderer.info.render.triangles.toLocaleString();
+    frames = 0;
+    fpsAccum = 0;
+  }
+
+  if (state.flameOn){
+    flameLight.intensity = 3.2 + Math.sin(now * 0.015) * 0.6 + Math.sin(now * 0.037) * 0.3;
+    heatLight.intensity = 3.8 + Math.sin(now * 0.018) * 0.5;
+    flameSprite.material.opacity = 0.85 + Math.sin(now * 0.02) * 0.12;
+    const s = 2.6 + Math.sin(now * 0.025) * 0.15;
+    flameSprite.scale.set(s, s * 1.05, 1);
+  }
+
+  if (state.heatActive && state.flameOn){
+    const s = 8 + Math.sin(now * 0.004) * 1.5;
+    heatGlow.scale.set(s, s, 1);
+    heatGlow.material.opacity = 0.7 + Math.sin(now * 0.006) * 0.2;
+  }
+
+  if (state.coolingOn){
+    const s = 16 + Math.sin(now * 0.003) * 1.8;
+    coldGlow.scale.set(s, s, 1);
+  }
+
+  if (state.flowActive){
+    const t = timeSec;
+    [...coldParticles, ...hotParticles].forEach(p => {
+      const u = (t * p.userData.speed + p.userData.offset) % 1;
+      p.userData.curve.getPointAt(u, p.position);
+      p.material.opacity = 0.7 + Math.sin(t * 3 + p.userData.offset * 10) * 0.25;
+      const scale = 0.85 + Math.sin(t * 4 + p.userData.offset * 6) * 0.15;
+      p.scale.setScalar(scale);
+    });
+  } else {
+    [...coldParticles, ...hotParticles].forEach(p => {
+      p.position.set(0, -9999, 0);
+    });
+  }
+
+  if (state.coolingOn){
+    condensationDrops.children.forEach((drop) => {
+      const t = timeSec * drop.userData.speed + drop.userData.phase;
+      drop.position.y = drop.userData.basePos.y + Math.sin(t) * 0.05;
+      drop.scale.y = 1 + Math.abs(Math.sin(t * 0.5)) * 0.3;
+    });
+  }
+
+  if (state.tourActive) updateTour(now);
+
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+requestAnimationFrame((t) => {
+  lastTime = t;
+  animate(t);
+  requestAnimationFrame(() => {
+    document.getElementById('loading').classList.add('hidden');
+    showToast('✅ Rev N — جاهز · Blueprint + P-H Diagram + Laws of Thermodynamics');
+  });
+});
+</script>
+
+</body>
+</html>
